@@ -4,6 +4,7 @@ void multipv_search(Position &position, ThreadInfo &thread_info) {
 
   const uint16_t user_multipv = thread_info.multipv;
   thread_info.multipv = 5;
+  thread_info.human_report_pvs = std::min<uint16_t>(user_multipv, 5);
   thread_info.opt_time = thread_info.opt_time * 3 / 4;
   thread_info.pv_material = {0};
 

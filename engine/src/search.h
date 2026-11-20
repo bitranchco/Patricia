@@ -1034,6 +1034,14 @@ int search(int alpha, int beta, int depth, bool cutnode, Position &position,
 // Walks the PV, printing it unless print is false. In weakened (human)
 // mode it also records the material after the first few moves, which
 // search_human relies on, so it must run even when nothing is printed.
+// Whether the current multipv line is shown to the GUI. Weakened mode
+// searches extra lines internally to pick a mistake from and only shows
+// as many as the user's MultiPV asks for.
+bool reports_pv_line(const ThreadInfo &thread_info) {
+  return !thread_info.is_human ||
+         thread_info.multipv_index < thread_info.human_report_pvs;
+}
+
 void print_pv(Position &position, ThreadInfo &thread_info,
               bool print = true) {
   Position temp_pos = position;
@@ -1150,7 +1158,7 @@ void iterative_deepen(Position &position, ThreadInfo &thread_info,
         }
 
         if (thread_info.thread_id == 0 && !thread_info.doing_datagen &&
-            !(thread_info.is_human && thread_info.multipv_index)) {
+            reports_pv_line(thread_info)) {
           std::string bound_string;
           if (score >= beta) {
             bound_string = "lowerbound";
@@ -1229,10 +1237,7 @@ void iterative_deepen(Position &position, ThreadInfo &thread_info,
         }
 
         if (!thread_info.doing_datagen) {
-          // Weakened mode searches extra lines internally to pick a mistake
-          // from; only report the first one.
-          const bool report =
-              !(thread_info.is_human && thread_info.multipv_index);
+          const bool report = reports_pv_line(thread_info);
           if (report) {
             printf("info multipv %i depth %i seldepth %i score %s nodes %" PRIu64
                    " nps %" PRIi64 " tbhits %" PRIu64 " time %" PRIi64 " pv ",

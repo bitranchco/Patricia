@@ -61,6 +61,9 @@ struct ThreadInfo {
   bool datagen_stop = false;
 
   bool is_human = false;
+  // Lines to report during a weakened search, which searches more lines
+  // internally than the user asked for.
+  uint16_t human_report_pvs = 1;
   int cp_accum_loss = 0;
   int cp_loss = 0;
 
