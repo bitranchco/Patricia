@@ -15,6 +15,9 @@
 #if defined(__AVX512BW__) || defined(__AVX2__)
 #include <immintrin.h>
 #endif
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 #if defined(NDEBUG) || defined(__OPTIMIZE__) ||                                \
     (defined(_MSC_VER) && !defined(_DEBUG))
@@ -171,6 +174,50 @@ NNUE_INLINE void nnue_store(int16_t *p, NnueVec v) noexcept {
   s = _mm_add_epi32(s, _mm_unpackhi_epi64(s, s));
   s = _mm_add_epi32(s, _mm_shuffle_epi32(s, 0xB1));
   return _mm_cvtsi128_si32(s);
+}
+#elif defined(__ARM_NEON)
+#define PATRICIA_NNUE_SIMD 1
+// NnueVec holds 8 x int16; the 32-bit helpers reinterpret it as 4 x int32.
+using NnueVec = int16x8_t;
+inline constexpr size_t NNUE_VEC_WIDTH = 8;
+[[nodiscard]] NNUE_INLINE NnueVec nnue_load(const int16_t *p) noexcept {
+  return vld1q_s16(p);
+}
+NNUE_INLINE void nnue_store(int16_t *p, NnueVec v) noexcept {
+  vst1q_s16(p, v);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_sadd16(NnueVec a, NnueVec b) noexcept {
+  return vqaddq_s16(a, b);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_ssub16(NnueVec a, NnueVec b) noexcept {
+  return vqsubq_s16(a, b);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_clamp16(NnueVec v, NnueVec lo,
+                                               NnueVec hi) noexcept {
+  return vminq_s16(vmaxq_s16(v, lo), hi);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_mullo16(NnueVec a, NnueVec b) noexcept {
+  return vmulq_s16(a, b);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_set1_16(int16_t x) noexcept {
+  return vdupq_n_s16(x);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_zero() noexcept {
+  return vdupq_n_s16(0);
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_add32(NnueVec a, NnueVec b) noexcept {
+  return vreinterpretq_s16_s32(
+      vaddq_s32(vreinterpretq_s32_s16(a), vreinterpretq_s32_s16(b)));
+}
+[[nodiscard]] NNUE_INLINE NnueVec nnue_dpwssd(NnueVec sum, NnueVec a,
+                                              NnueVec b) noexcept {
+  int32x4_t s = vreinterpretq_s32_s16(sum);
+  s = vmlal_s16(s, vget_low_s16(a), vget_low_s16(b));
+  s = vmlal_high_s16(s, a, b);
+  return vreinterpretq_s16_s32(s);
+}
+[[nodiscard]] NNUE_INLINE int32_t nnue_hadd32(NnueVec v) noexcept {
+  return vaddvq_s32(vreinterpretq_s32_s16(v));
 }
 #else
 #define PATRICIA_NNUE_SIMD 0
