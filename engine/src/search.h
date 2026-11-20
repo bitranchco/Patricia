@@ -688,6 +688,10 @@ int search(int alpha, int beta, int depth, bool cutnode, Position &position,
 
   while (Move move = next_move(picker, position, thread_info, tt_move, skip)) {
     if (root) {
+      // Restrict the root to root_moves (honours UCI searchmoves).
+      if (!find_root_move(thread_info, move)) {
+        continue;
+      }
       bool pv_skip = false;
       for (int i = 0; i < thread_info.multipv_index; i++) {
         if (thread_info.best_moves[i] == move) {
@@ -1092,8 +1096,19 @@ void iterative_deepen(Position &position, ThreadInfo &thread_info,
   {
     std::array<Move, ListSize> raw_root_moves;
     int nmoves = legal_movegen(position, raw_root_moves);
+    const auto &search_moves = thread_info.search_moves;
     for (int i = 0; i < nmoves; i++) {
-      thread_info.root_moves.push_back({raw_root_moves[i], 0});
+      if (search_moves.empty() ||
+          std::find(search_moves.begin(), search_moves.end(),
+                    raw_root_moves[i]) != search_moves.end()) {
+        thread_info.root_moves.push_back({raw_root_moves[i], 0});
+      }
+    }
+    // If none of the searchmoves are legal here, search every move instead.
+    if (thread_info.root_moves.empty()) {
+      for (int i = 0; i < nmoves; i++) {
+        thread_info.root_moves.push_back({raw_root_moves[i], 0});
+      }
     }
   }
 

@@ -403,10 +403,26 @@ void uci(ThreadInfo &thread_info, Position &position) {
       thread_info.max_nodes_searched = UINT64_MAX / 2;
       thread_info.max_iter_depth = MaxSearchDepth;
 
+      thread_info.search_moves.clear();
+
       int color = position.color, time = INT32_MAX, increment = 0;
+      int movetime = -1;
+      bool parsing_searchmoves = false;
       std::string token;
       while (input_stream >> token) {
-        if (token == "infinite") {
+        if (parsing_searchmoves) {
+          // searchmoves consumes every following token that is a move.
+          Move move = uci_to_internal(position, token);
+          if (move != MoveNone) {
+            thread_info.search_moves.push_back(move);
+            continue;
+          }
+          parsing_searchmoves = false;
+        }
+
+        if (token == "searchmoves") {
+          parsing_searchmoves = true;
+        } else if (token == "infinite") {
           ;
         } else if (token == "wtime" && color == Colors::White) {
           input_stream >> time;
@@ -425,21 +441,21 @@ void uci(ThreadInfo &thread_info, Position &position) {
           input_stream >> depth;
           thread_info.max_iter_depth = depth;
         } else if (token == "movetime") {
-          int time;
-          input_stream >> time;
-          thread_info.max_time = std::max(2, time - thread_data.move_overhead);
-          thread_info.opt_time = INT32_MAX / 2;
-          goto run;
+          input_stream >> movetime;
         }
       }
 
-      // Calculate time allotted to search
+      if (movetime >= 0) {
+        thread_info.max_time =
+            std::max(2, movetime - thread_data.move_overhead);
+        thread_info.opt_time = INT32_MAX / 2;
+      } else {
+        // Calculate time allotted to search
+        time = std::max(2, time - thread_data.move_overhead);
+        thread_info.max_time = time * 8 / 10;
+        thread_info.opt_time = (time / 20 + increment) * 6 / 10;
+      }
 
-      time = std::max(2, time - thread_data.move_overhead);
-      thread_info.max_time = time * 8 / 10;
-      thread_info.opt_time = (time / 20 + increment) * 6 / 10;
-
-    run:
       run_thread(position, thread_info, s);
     }
 
