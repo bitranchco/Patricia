@@ -210,7 +210,7 @@ void uci(ThreadInfo &thread_info, Position &position) {
              "option name Threads type spin default 1 min 1 max 1024\n"
              "option name SyzygyPath type string default null\n"
              "option name MultiPV type spin default 1 min 1 max 255\n"
-             "option name Skill_Level type spin default 21 min 1 max 21\n"
+             "option name Skill Level type spin default 20 min 0 max 20\n"
              "option name Move_Overhead type spin default 50 min 0 max 5000\n"
              "option name UCI_Chess960 type check default false\n");
 
@@ -232,11 +232,13 @@ void uci(ThreadInfo &thread_info, Position &position) {
     }
 
     else if (command == "setoption") {
-      std::string name;
-      int value;
-      input_stream >> command;
-      input_stream >> name;
-      input_stream >> command;
+      // setoption name <id, may contain spaces> [value <x>]
+      std::string name, token;
+      int value = 0;
+      input_stream >> token; // "name"
+      while (input_stream >> token && token != "value") {
+        name += (name.empty() ? "" : " ") + token;
+      }
 
       if (name == "UCI_LimitStrength" || name == "UCI_Chess960") {
         std::string value;
@@ -299,14 +301,18 @@ void uci(ThreadInfo &thread_info, Position &position) {
         }
       }
 
-      else if (name == "Skill_Level") {
-        if (value == 21) {
+      else if (name == "Skill Level") {
+        // 0-19 select a strength from skill_levels; 20 is full strength.
+        int level =
+            std::clamp(value, 0, static_cast<int>(skill_levels.size()));
+
+        if (level == static_cast<int>(skill_levels.size())) {
           thread_info.is_human = false;
         }
 
         else {
           thread_info.is_human = true;
-          int to_elo = skill_levels[value - 1];
+          int to_elo = skill_levels[level];
           thread_info.cp_loss = 120 - (to_elo / 25);
         }
       }
