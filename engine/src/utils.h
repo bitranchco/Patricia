@@ -22,6 +22,7 @@ struct ThreadInfo {
   uint64_t tb_hits;
   uint64_t nodes; // Total nodes searched so far this search
   std::vector<RootMoveInfo> root_moves;
+  std::vector<Move> search_moves; // UCI searchmoves; empty = all moves
 
   std::chrono::steady_clock::time_point start_time; // Start time of the search
 
