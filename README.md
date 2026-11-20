@@ -67,29 +67,30 @@ Patricia supports a few options for users:
 
 `MultiPV`: Patricia searches the best X moves instead of only looking for the best line.
 
-`Skill_Level`: Sets Patricia to play at one of 20 possible strength levels. Note that setting it to 21 unlocks Patricia's full strength. They are:
+`Skill Level`: Sets Patricia to play at one of 20 possible strength levels (0-19), or at full strength with 20 (the default). The levels are:
 | Skill Level | ELO |
 |:---:|---|
-| 1 | 500 |
-| 2 | 800 |
-| 3 | 1000 |
-| 4 | 1200 |
-| 5 | 1300 |
-| 6 | 1400 |
-| 7 | 1500 |
-| 8 | 1600 |
-| 9 | 1700 |
-| 10 | 1800 |
-| 11 | 1900 |
-| 12 | 2000 |
-| 13 | 2100 |
-| 14 | 2200 |
-| 15 | 2300 |
-| 16 | 2400 |
-| 17 | 2500 |
-| 18 | 2650 |
-| 19 | 2800 |
-| 20 | 3000 |
+| 0 | 500 |
+| 1 | 800 |
+| 2 | 1000 |
+| 3 | 1200 |
+| 4 | 1300 |
+| 5 | 1400 |
+| 6 | 1500 |
+| 7 | 1600 |
+| 8 | 1700 |
+| 9 | 1800 |
+| 10 | 1900 |
+| 11 | 2000 |
+| 12 | 2100 |
+| 13 | 2200 |
+| 14 | 2300 |
+| 15 | 2400 |
+| 16 | 2500 |
+| 17 | 2650 |
+| 18 | 2800 |
+| 19 | 3000 |
+| 20 | Full strength |
 
 `go nodes`: Search a position for a given number of nodes.
 
