@@ -1031,7 +1031,11 @@ int search(int alpha, int beta, int depth, bool cutnode, Position &position,
   return best_score;
 }
 
-void print_pv(Position &position, ThreadInfo &thread_info) {
+// Walks the PV, printing it unless print is false. In weakened (human)
+// mode it also records the material after the first few moves, which
+// search_human relies on, so it must run even when nothing is printed.
+void print_pv(Position &position, ThreadInfo &thread_info,
+              bool print = true) {
   Position temp_pos = position;
 
   int indx = 0;
@@ -1061,14 +1065,18 @@ void print_pv(Position &position, ThreadInfo &thread_info) {
       break;
     }
 
-    printf("%s ", internal_to_uci(temp_pos, best_move).c_str());
+    if (print) {
+      printf("%s ", internal_to_uci(temp_pos, best_move).c_str());
+    }
 
     make_move(temp_pos, best_move);
 
     indx++;
   }
 
-  printf("\n");
+  if (print) {
+    printf("\n");
+  }
 }
 
 void iterative_deepen(Position &position, ThreadInfo &thread_info,
@@ -1221,11 +1229,17 @@ void iterative_deepen(Position &position, ThreadInfo &thread_info,
         }
 
         if (!thread_info.doing_datagen) {
-          printf("info multipv %i depth %i seldepth %i score %s nodes %" PRIu64
-                 " nps %" PRIi64 " tbhits %" PRIu64 " time %" PRIi64 " pv ",
-                 thread_info.multipv_index + 1, depth, thread_info.seldepth,
-                 eval_string.c_str(), nodes, nps, tb_hits, search_time);
-          print_pv(position, thread_info);
+          // Weakened mode searches extra lines internally to pick a mistake
+          // from; only report the first one.
+          const bool report =
+              !(thread_info.is_human && thread_info.multipv_index);
+          if (report) {
+            printf("info multipv %i depth %i seldepth %i score %s nodes %" PRIu64
+                   " nps %" PRIi64 " tbhits %" PRIu64 " time %" PRIi64 " pv ",
+                   thread_info.multipv_index + 1, depth, thread_info.seldepth,
+                   eval_string.c_str(), nodes, nps, tb_hits, search_time);
+          }
+          print_pv(position, thread_info, report);
         }
 
         else {

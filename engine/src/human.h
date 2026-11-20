@@ -2,13 +2,14 @@
 
 void multipv_search(Position &position, ThreadInfo &thread_info) {
 
+  const uint16_t user_multipv = thread_info.multipv;
   thread_info.multipv = 5;
   thread_info.opt_time = thread_info.opt_time * 3 / 4;
   thread_info.pv_material = {0};
 
   search_position(position, thread_info, TT);
 
-  thread_info.multipv = 1;
+  thread_info.multipv = user_multipv;
 }
 // cp loss 5 - 2900
 // cp loss 10 - 2700
