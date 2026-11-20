@@ -22,6 +22,10 @@ std::string
 internal_to_uci(const Position &position,
                 Move move) { // Converts an internal move into a uci move.
 
+  if (move == MoveNone) {
+    return "0000"; // UCI's null move, e.g. no legal moves
+  }
+
   int from = extract_from(move), to = extract_to(move),
       promo = extract_promo(move);
 
