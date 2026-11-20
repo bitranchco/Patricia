@@ -4,8 +4,12 @@ EXE := patricia
 SOURCES := src/patricia.cpp src/fathom/src/tbprobe.c
 
 CXX := clang++
-CXXFLAGS := -O3 -march=native -std=c++20 -ffast-math
+# Target CPU. Override for portable builds, e.g. ARCH=x86-64-v3 or ARCH=armv8-a.
+ARCH ?= native
+CXXFLAGS := -O3 -march=$(ARCH) -std=c++20 -ffast-math
 LINKER :=
+# Extra link flags, e.g. LDFLAGS=-static.
+LDFLAGS ?=
 
 ifeq ($(OS), Windows_NT)
 	DETECTED_OS := Windows
@@ -21,7 +25,7 @@ OUT := $(EXE)$(SUFFIX)
 
 # --- Native build ----------------------------------------------------------
 build: $(SOURCES)
-	$(CXX) $^ $(CXXFLAGS) -o $(OUT) $(LINKER)
+	$(CXX) $^ $(CXXFLAGS) -o $(OUT) $(LINKER) $(LDFLAGS)
 
 default: build
 
