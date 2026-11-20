@@ -240,7 +240,13 @@ void uci(ThreadInfo &thread_info, Position &position) {
         name += (name.empty() ? "" : " ") + token;
       }
 
-      if (name == "UCI_LimitStrength" || name == "UCI_Chess960") {
+      if (name == "UCI_LimitStrength") {
+        // Not implemented yet (there is no UCI_Elo); ignore it rather than
+        // letting it fall through to another option.
+        continue;
+      }
+
+      if (name == "UCI_Chess960") {
         std::string value;
         input_stream >> value;
         if (value == "true") {
