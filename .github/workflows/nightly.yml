@@ -1,0 +1,166 @@
+name: Nightly
+
+# Builds Patricia for every supported platform once a day and publishes the
+# binaries to a rolling "nightly" pre-release. Skips the run when main has not
+# changed since the last nightly, unless started manually with "force".
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if main has not changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          tagged=$(gh api "repos/${GITHUB_REPOSITORY}/commits/nightly" --jq .sha 2>/dev/null || true)
+          echo "main: ${GITHUB_SHA}  nightly: ${tagged:-none}"
+          if [ "$tagged" = "$GITHUB_SHA" ] && [ "$FORCE" != "true" ]; then
+            echo "No changes since the last nightly; skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  unix:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86-64-v2, os: ubuntu-latest, arch: x86-64-v2, ldflags: -static, bench: true }
+          - { name: linux-x86-64-v3, os: ubuntu-latest, arch: x86-64-v3, ldflags: -static, bench: true }
+          # Runners do not reliably have AVX-512, so this build is not benched.
+          - { name: linux-x86-64-v4, os: ubuntu-latest, arch: x86-64-v4, ldflags: -static, bench: false }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, arch: armv8-a, ldflags: -static, bench: true }
+          - { name: macos-arm64, os: macos-latest, arch: armv8.4-a, ldflags: "", bench: true }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q clang
+
+      - name: Build
+        working-directory: engine
+        run: make ARCH=${{ matrix.arch }} LDFLAGS="${{ matrix.ldflags }}" EXE=patricia-${{ matrix.name }}
+
+      - name: Bench
+        if: matrix.bench
+        working-directory: engine
+        run: ./patricia-${{ matrix.name }} bench | tee /dev/stderr | grep '^Bench:' > bench-${{ matrix.name }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            engine/patricia-${{ matrix.name }}
+            engine/bench-${{ matrix.name }}.txt
+
+  windows:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x86-64-v2, os: windows-latest, msystem: CLANG64, pkg: mingw-w64-clang-x86_64-clang, arch: x86-64-v2, bench: true }
+          - { name: windows-x86-64-v3, os: windows-latest, msystem: CLANG64, pkg: mingw-w64-clang-x86_64-clang, arch: x86-64-v3, bench: true }
+          - { name: windows-x86-64-v4, os: windows-latest, msystem: CLANG64, pkg: mingw-w64-clang-x86_64-clang, arch: x86-64-v4, bench: false }
+          - { name: windows-arm64, os: windows-11-arm, msystem: CLANGARM64, pkg: mingw-w64-clang-aarch64-clang, arch: armv8-a, bench: true }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          install: make ${{ matrix.pkg }}
+
+      - name: Build
+        working-directory: engine
+        run: make ARCH=${{ matrix.arch }} LDFLAGS=-static EXE=patricia-${{ matrix.name }}
+
+      - name: Bench
+        if: matrix.bench
+        working-directory: engine
+        run: ./patricia-${{ matrix.name }}.exe bench | tee /dev/stderr | grep '^Bench:' > bench-${{ matrix.name }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            engine/patricia-${{ matrix.name }}.exe
+            engine/bench-${{ matrix.name }}.txt
+
+  release:
+    needs: [unix, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check bench signatures match
+        working-directory: dist
+        run: |
+          for f in bench-*.txt; do printf '%-32s %s\n' "$f" "$(cat "$f")"; done
+          if [ "$(cat bench-*.txt | awk '{print $2}' | sort -u | wc -l)" -ne 1 ]; then
+            echo "::error::Bench node counts differ between builds"
+            exit 1
+          fi
+
+      - name: Publish nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bench=$(cat dist/bench-*.txt | awk '{print $2}' | sort -u)
+          {
+            echo "Automated build of \`main\` at ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d))."
+            echo
+            echo "Bench: ${bench}"
+            echo
+            echo "- \`x86-64-v2\`: any 64-bit x86 CPU. \`v3\`: AVX2 (most CPUs since 2015). \`v4\`: AVX-512."
+            echo "- \`arm64\`: Apple Silicon, Windows on ARM, Linux ARM64 (e.g. Raspberry Pi 4/5)."
+            echo
+            echo "The macOS binary is ad-hoc signed, not notarized. If macOS blocks it after"
+            echo "downloading, run \`xattr -d com.apple.quarantine patricia-macos-arm64\`."
+          } > notes.md
+          cat notes.md
+
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin refs/tags/nightly
+
+          if gh release view nightly > /dev/null 2>&1; then
+            gh release edit nightly --prerelease --title "Nightly" --notes-file notes.md
+          else
+            gh release create nightly --prerelease --title "Nightly" --notes-file notes.md
+          fi
+          gh release upload nightly --clobber dist/patricia-*
