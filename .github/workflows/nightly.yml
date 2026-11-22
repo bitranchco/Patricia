@@ -170,3 +170,22 @@ jobs:
             gh release create nightly --prerelease --title "Nightly" --notes-file notes.md
           fi
           gh release upload nightly --clobber dist/patricia-*
+
+      # The rolling "nightly" release is overwritten every run, so this also
+      # publishes a dated snapshot whose assets never change, for anyone who
+      # needs a stable download URL or hash. A rerun of the same commit on the
+      # same day leaves the existing snapshot alone.
+      - name: Publish immutable snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          snap="nightly-$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
+          if gh release view "$snap" > /dev/null 2>&1; then
+            echo "$snap already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "$snap" --prerelease --latest=false \
+            --target "$GITHUB_SHA" \
+            --title "Nightly $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})" \
+            --notes-file notes.md \
+            dist/patricia-*
